@@ -47,12 +47,16 @@ export class GlancesIntegration extends Integration implements ISystemHealthMoni
       },
       availablePkgUpdates: 0,
       version: session.version,
-      fileSystem: stats.fs.map((fileSystem) => ({
-        deviceName: fileSystem.device_name,
-        used: `${fileSystem.used}`,
-        available: `${fileSystem.free}`,
-        percentage: fileSystem.percent,
-      })),
+      fileSystem: stats.fs
+        .filter(
+          (fileSystem, index, self) => index === self.findIndex((inner) => inner.device_name === fileSystem.device_name),
+        )
+        .map((fileSystem) => ({
+          deviceName: fileSystem.device_name,
+          used: `${fileSystem.used}`,
+          available: `${fileSystem.free}`,
+          percentage: fileSystem.percent,
+        })),
       uptime: stats.uptime.as("seconds"),
       rebootRequired: false,
       cpuModelName: stats.quicklook.cpu_name,
