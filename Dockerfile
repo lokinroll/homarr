@@ -18,7 +18,7 @@ ARG SKIP_ENV_VALIDATION='true'
 ARG CI='true'
 ARG DISABLE_REDIS_LOGS='true'
 
-RUN corepack enable pnpm && pnpm build
+RUN corepack enable pnpm && DB_URL=/app/db.sqlite pnpm build
 
 FROM base AS runner
 WORKDIR /app

@@ -110,6 +110,11 @@ const addUserToEveryoneGroupIfNotMemberAsync = async (db: Database, userId: stri
 
 const synchronizeGroupsWithExternalForUserAsync = async (db: Database, userId: string, externalGroups: string[]) => {
   const ignoredGroups = [everyoneGroup];
+
+  const groupMapping =
+    (env as { AUTH_OIDC_GROUP_NAME_MAPPING?: Record<string, string> }).AUTH_OIDC_GROUP_NAME_MAPPING ?? {};
+  const mappedGroups = (externalGroups as string[]).map((group) => groupMapping[group] ?? group);
+
   const dbGroupMembers = await db.query.groupMembers.findMany({
     where: eq(groupMembers.userId, userId),
     with: {
@@ -121,7 +126,7 @@ const synchronizeGroupsWithExternalForUserAsync = async (db: Database, userId: s
    * The below groups are those groups the user is part of in the external system, but not in Homarr.
    * So he has to be added to those groups.
    */
-  const missingExternalGroupsForUser = externalGroups.filter(
+  const missingExternalGroupsForUser = mappedGroups.filter(
     (externalGroup) => !dbGroupMembers.some(({ group }) => group.name === externalGroup),
   );
 
@@ -162,7 +167,7 @@ const synchronizeGroupsWithExternalForUserAsync = async (db: Database, userId: s
    * So he has to be removed from those groups.
    */
   const groupsUserIsNoLongerMemberOfExternally = dbGroupMembers.filter(
-    ({ group }) => !externalGroups.concat(ignoredGroups).includes(group.name),
+    ({ group }) => !mappedGroups.concat(ignoredGroups).includes(group.name),
   );
 
   if (groupsUserIsNoLongerMemberOfExternally.length > 0) {

@@ -40,6 +40,19 @@ export const env = createEnv({
           AUTH_OIDC_NAME_ATTRIBUTE_OVERWRITE: z.string().optional(),
           AUTH_OIDC_FORCE_USERINFO: createBooleanSchema(false),
           AUTH_OIDC_ENABLE_DANGEROUS_ACCOUNT_LINKING: createBooleanSchema(false),
+          AUTH_OIDC_GROUP_NAME_MAPPING: z
+            .string()
+            .optional()
+            .transform((mapping) => {
+              if (!mapping) return {};
+              return mapping.split(",").reduce((acc, current) => {
+                const [id, name] = current.split(":");
+                if (id && name) {
+                  acc[id.trim()] = name.trim();
+                }
+                return acc;
+              }, {} as Record<string, string>);
+            }),
         }
       : {}),
     ...(authProviders.includes("ldap")
