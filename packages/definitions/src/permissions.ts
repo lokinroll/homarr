@@ -31,6 +31,19 @@ export const integrationPermissionsMap = {
 export type IntegrationPermission = (typeof integrationPermissions)[number];
 
 /**
+ * Permissions for apps.
+ * use: Can see and use the app.
+ * full: Can modify the app's settings.
+ */
+export const appPermissions = ["use", "full"] as const;
+export const appPermissionsMap = {
+  use: "app-use-all",
+  full: "app-full-all",
+} satisfies Record<AppPermission, GroupPermissionKey>;
+
+export type AppPermission = (typeof appPermissions)[number];
+
+/**
  * Global permissions that can be assigned to groups.
  * The keys are generated through combining the key and all array items.
  * For example "board-create" is a generated key

@@ -20,6 +20,8 @@ export const {
   accounts,
   apiKeys,
   apps,
+  appGroupPermissions,
+  appUserPermissions,
   boardGroupPermissions,
   boardUserPermissions,
   boards,

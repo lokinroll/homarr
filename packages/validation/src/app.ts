@@ -1,4 +1,7 @@
 import { z } from "zod/v4";
+import { appPermissions } from "@homarr/definitions";
+import { zodEnumFromArray } from "./enums";
+import { createSavePermissionsSchema } from "./permissions";
 
 export const appHrefSchema = z
   .string()
@@ -34,3 +37,5 @@ export const appCreateManySchema = z
   .min(1);
 
 export const appEditSchema = appManageSchema.and(z.object({ id: z.string() }));
+
+export const appSavePermissionsSchema = createSavePermissionsSchema(zodEnumFromArray(appPermissions));

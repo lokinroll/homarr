@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { Container, Stack, Title } from "@mantine/core";
+import { Container, Stack, Title, Fieldset } from "@mantine/core";
 
 import { api } from "@homarr/api/server";
 import { auth } from "@homarr/auth/next";
@@ -7,6 +7,7 @@ import { getI18n } from "@homarr/translation/server";
 
 import { DynamicBreadcrumb } from "~/components/navigation/dynamic-breadcrumb";
 import { AppEditForm } from "./_app-edit-form";
+import { AppAccessSettings } from "../../_components/app-access-settings";
 
 interface AppEditPageProps {
   params: Promise<{ id: string }>;
@@ -20,6 +21,7 @@ export default async function AppEditPage(props: AppEditPageProps) {
     notFound();
   }
   const app = await api.app.byId({ id: params.id });
+  const appPermissions = await api.app.getAppPermissions({ id: params.id });
   const t = await getI18n();
 
   return (
@@ -29,6 +31,11 @@ export default async function AppEditPage(props: AppEditPageProps) {
         <Stack>
           <Title>{t("app.page.edit.title")}</Title>
           <AppEditForm app={app} />
+
+          <Title order={2}>{t("app.permission.title")}</Title>
+          <Fieldset>
+            <AppAccessSettings app={app} initialPermissions={appPermissions} />
+          </Fieldset>
         </Stack>
       </Container>
     </>

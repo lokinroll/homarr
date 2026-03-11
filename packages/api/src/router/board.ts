@@ -55,8 +55,10 @@ import type { BoardItemAdvancedOptions } from "@homarr/validation/shared";
 import { sectionSchema, sharedItemSchema } from "@homarr/validation/shared";
 
 import { createTRPCRouter, permissionRequiredProcedure, protectedProcedure, publicProcedure } from "../trpc";
+import { AppAccessControl } from "./app/app-access-control";
 import { throwIfActionForbiddenAsync } from "./board/board-access";
 import { generateResponsiveGridFor } from "./board/grid-algorithm";
+import { IntegrationAccessControl } from "./integration/integration-access-control";
 
 export const boardRouter = createTRPCRouter({
   exists: permissionRequiredProcedure
@@ -583,18 +585,18 @@ export const boardRouter = createTRPCRouter({
 
     await throwIfActionForbiddenAsync(ctx, boardWhere, "view");
 
-    return await getFullBoardWithWhereAsync(ctx.db, boardWhere, ctx.session?.user.id ?? null);
+    return await getFullBoardWithWhereAsync(ctx.db, boardWhere, ctx.session?.user ?? null);
   }),
   getBoardByName: publicProcedure.input(boardByNameSchema).query(async ({ input, ctx }) => {
     const boardWhere = eq(sql`UPPER(${boards.name})`, input.name.toUpperCase());
     await throwIfActionForbiddenAsync(ctx, boardWhere, "view");
 
-    return await getFullBoardWithWhereAsync(ctx.db, boardWhere, ctx.session?.user.id ?? null);
+    return await getFullBoardWithWhereAsync(ctx.db, boardWhere, ctx.session?.user ?? null);
   }),
   saveLayouts: protectedProcedure.input(boardSaveLayoutsSchema).mutation(async ({ ctx, input }) => {
     await throwIfActionForbiddenAsync(ctx, eq(boards.id, input.id), "modify");
 
-    const board = await getFullBoardWithWhereAsync(ctx.db, eq(boards.id, input.id), ctx.session.user.id);
+    const board = await getFullBoardWithWhereAsync(ctx.db, eq(boards.id, input.id), ctx.session.user);
 
     const addedLayouts = filterAddedItems(input.layouts, board.layouts);
 
@@ -754,7 +756,7 @@ export const boardRouter = createTRPCRouter({
   saveBoard: protectedProcedure.input(boardSaveSchema).mutation(async ({ input, ctx }) => {
     await throwIfActionForbiddenAsync(ctx, eq(boards.id, input.id), "modify");
 
-    const dbBoard = await getFullBoardWithWhereAsync(ctx.db, eq(boards.id, input.id), ctx.session.user.id);
+    const dbBoard = await getFullBoardWithWhereAsync(ctx.db, eq(boards.id, input.id), ctx.session.user);
 
     await handleTransactionsAsync(ctx.db, {
       async handleAsync(db, schema) {
@@ -1527,9 +1529,9 @@ const getElementsForLayout = (board: Awaited<ReturnType<typeof getFullBoardWithW
   return [...itemElements, ...sectionElements];
 };
 
-const getFullBoardWithWhereAsync = async (db: Database, where: SQL<unknown>, userId: string | null) => {
+const getFullBoardWithWhereAsync = async (db: Database, where: SQL<unknown>, user: Session["user"] | null) => {
   const groupsOfCurrentUser = await db.query.groupMembers.findMany({
-    where: eq(groupMembers.userId, userId ?? ""),
+    where: eq(groupMembers.userId, user?.id ?? ""),
   });
   const board = await db.query.boards.findFirst({
     where,
@@ -1545,7 +1547,7 @@ const getFullBoardWithWhereAsync = async (db: Database, where: SQL<unknown>, use
       sections: {
         with: {
           collapseStates: {
-            where: eq(sectionCollapseStates.userId, userId ?? ""),
+            where: eq(sectionCollapseStates.userId, user?.id ?? ""),
           },
           layouts: true,
         },
@@ -1562,7 +1564,7 @@ const getFullBoardWithWhereAsync = async (db: Database, where: SQL<unknown>, use
       },
       layouts: true,
       userPermissions: {
-        where: eq(boardUserPermissions.userId, userId ?? ""),
+        where: eq(boardUserPermissions.userId, user?.id ?? ""),
         columns: {
           permission: true,
         },
@@ -1572,6 +1574,12 @@ const getFullBoardWithWhereAsync = async (db: Database, where: SQL<unknown>, use
       },
     },
   });
+
+  const appAccessControl = new AppAccessControl(db, user);
+  const visibleAppIds = await appAccessControl.getVisibleAppIdsAsync();
+
+  const integrationAccessControl = new IntegrationAccessControl(db, user);
+  const visibleIntegrationIds = await integrationAccessControl.getVisibleIntegrationIdsAsync();
 
   if (!board) {
     throw new TRPCError({
@@ -1604,22 +1612,43 @@ const getFullBoardWithWhereAsync = async (db: Database, where: SQL<unknown>, use
         collapsed: collapseStates.at(0)?.collapsed ?? false,
       }),
     ),
-    items: items.map(({ integrations: itemIntegrations, ...item }) =>
-      parseItem({
-        ...item,
-        layouts: item.layouts.map((layout) => ({
-          xOffset: layout.xOffset,
-          yOffset: layout.yOffset,
-          width: layout.width,
-          height: layout.height,
-          layoutId: layout.layoutId,
-          sectionId: layout.sectionId,
-        })),
-        integrationIds: itemIntegrations.map((item) => item.integration.id),
-        advancedOptions: superjson.parse<BoardItemAdvancedOptions>(item.advancedOptions),
-        options: superjson.parse<Record<string, unknown>>(item.options),
-      }),
-    ),
+    items: items
+      .filter((item) => {
+        if (item.kind === "app") {
+          const options = superjson.parse<WidgetComponentProps<"app">["options"]>(item.options);
+          return visibleAppIds === null || visibleAppIds.includes(options.appId);
+        }
+
+        if (item.integrations.length > 0) {
+          return item.integrations.some(
+            (itemIntegration) =>
+              visibleIntegrationIds === null || visibleIntegrationIds.includes(itemIntegration.integrationId),
+          );
+        }
+
+        return true;
+      })
+      .map(({ integrations: itemIntegrations, ...item }) =>
+        parseItem({
+          ...item,
+          layouts: item.layouts.map((layout) => ({
+            xOffset: layout.xOffset,
+            yOffset: layout.yOffset,
+            width: layout.width,
+            height: layout.height,
+            layoutId: layout.layoutId,
+            sectionId: layout.sectionId,
+          })),
+          integrationIds: itemIntegrations
+            .filter(
+              (itemIntegration) =>
+                visibleIntegrationIds === null || visibleIntegrationIds.includes(itemIntegration.integrationId),
+            )
+            .map((item) => item.integration.id),
+          advancedOptions: superjson.parse<BoardItemAdvancedOptions>(item.advancedOptions),
+          options: superjson.parse<Record<string, unknown>>(item.options),
+        }),
+      ),
   };
 };
 

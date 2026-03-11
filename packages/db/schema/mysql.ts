@@ -38,6 +38,7 @@ import type {
   SectionKind,
   SupportedAuthProvider,
   WidgetKind,
+  AppPermission,
 } from "@homarr/definitions";
 
 const customBlob = customType<{ data: Buffer }>({
@@ -436,6 +437,42 @@ export const apps = mysqlTable("app", {
   pingUrl: text(),
 });
 
+export const appUserPermissions = mysqlTable(
+  "appUserPermission",
+  {
+    appId: varchar({ length: 64 })
+      .notNull()
+      .references(() => apps.id, { onDelete: "cascade" }),
+    userId: varchar({ length: 64 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    permission: varchar({ length: 128 }).$type<AppPermission>().notNull(),
+  },
+  (table) => ({
+    compoundKey: primaryKey({
+      columns: [table.appId, table.userId, table.permission],
+    }),
+  }),
+);
+
+export const appGroupPermissions = mysqlTable(
+  "appGroupPermissions",
+  {
+    appId: varchar({ length: 64 })
+      .notNull()
+      .references(() => apps.id, { onDelete: "cascade" }),
+    groupId: varchar({ length: 64 })
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    permission: varchar({ length: 128 }).$type<AppPermission>().notNull(),
+  },
+  (table) => ({
+    compoundKey: primaryKey({
+      columns: [table.appId, table.groupId, table.permission],
+    }),
+  }),
+);
+
 export const integrationItems = mysqlTable(
   "integration_item",
   {
@@ -514,6 +551,7 @@ export const userRelations = relations(users, ({ one, many }) => ({
   accounts: many(accounts),
   boards: many(boards),
   boardPermissions: many(boardUserPermissions),
+  appPermissions: many(appUserPermissions),
   groups: many(groupMembers),
   ownedGroups: many(groups),
   invites: many(invites),
@@ -570,6 +608,7 @@ export const groupMemberRelations = relations(groupMembers, ({ one }) => ({
 export const groupRelations = relations(groups, ({ one, many }) => ({
   permissions: many(groupPermissions),
   boardPermissions: many(boardGroupPermissions),
+  appPermissions: many(appGroupPermissions),
   members: many(groupMembers),
   owner: one(users, {
     fields: [groups.ownerId],
@@ -613,6 +652,33 @@ export const boardGroupPermissionRelations = relations(boardGroupPermissions, ({
   board: one(boards, {
     fields: [boardGroupPermissions.boardId],
     references: [boards.id],
+  }),
+}));
+
+export const appRelations = relations(apps, ({ many }) => ({
+  userPermissions: many(appUserPermissions),
+  groupPermissions: many(appGroupPermissions),
+}));
+
+export const appUserPermissionRelations = relations(appUserPermissions, ({ one }) => ({
+  user: one(users, {
+    fields: [appUserPermissions.userId],
+    references: [users.id],
+  }),
+  app: one(apps, {
+    fields: [appUserPermissions.appId],
+    references: [apps.id],
+  }),
+}));
+
+export const appGroupPermissionRelations = relations(appGroupPermissions, ({ one }) => ({
+  group: one(groups, {
+    fields: [appGroupPermissions.groupId],
+    references: [groups.id],
+  }),
+  app: one(apps, {
+    fields: [appGroupPermissions.appId],
+    references: [apps.id],
   }),
 }));
 

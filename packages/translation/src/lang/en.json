@@ -623,6 +623,11 @@
         "action": "Open app creation"
       },
       "add": "Add an app"
+    },
+    "permission": {
+      "title": "Permissions",
+      "use": "Select app in items",
+      "full": "Full app access"
     }
   },
   "integration": {

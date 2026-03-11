@@ -18,11 +18,17 @@ export const constructIntegrationPermissions = (integration: IntegrationPermissi
 
   return {
     hasFullAccess:
-      (session?.user.permissions.includes("integration-full-all") ?? false) || permissions.includes("full"),
+      (session?.user.permissions.includes("integration-full-all") ?? false) ||
+      (session?.user.permissions.includes("admin") ?? false) ||
+      permissions.includes("full"),
     hasInteractAccess:
       permissions.includes("full") ||
       permissions.includes("interact") ||
-      (session?.user.permissions.includes("integration-interact-all") ?? false),
-    hasUseAccess: permissions.length >= 1 || (session?.user.permissions.includes("integration-use-all") ?? false),
+      (session?.user.permissions.includes("integration-interact-all") ?? false) ||
+      (session?.user.permissions.includes("admin") ?? false),
+    hasUseAccess:
+      permissions.length >= 1 ||
+      (session?.user.permissions.includes("integration-use-all") ?? false) ||
+      (session?.user.permissions.includes("admin") ?? false),
   };
 };
